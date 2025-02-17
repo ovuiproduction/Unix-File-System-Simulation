@@ -65,7 +65,7 @@ Mimics Unix Shell Commands: Supports basic Unix commands like mkdir, rm, mv, etc
 Use the following commands to install and run the project:
 
 ```bash
-git clone <repository_url>
+git clone https://github.com/ovuiproduction/Unix-File-System-Simulation.git
 cd unix-fs-simulation
 gcc -o unix_fs_simulation main.c
 ./unix_fs_simulation

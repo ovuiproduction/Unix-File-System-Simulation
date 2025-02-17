@@ -5,7 +5,7 @@
 This project simulates a Unix-like file system using an N-ary tree data structure. It provides essential file and directory operations such as creation, deletion, traversal, and renaming. The project also includes a command-line interface that mimics Unix shell commands.
 
 ### Tech Stack
-```python
+```bash
 # Programming Language
 C
 

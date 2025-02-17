@@ -66,7 +66,7 @@ Use the following commands to install and run the project:
 
 ```bash
 git clone https://github.com/ovuiproduction/Unix-File-System-Simulation.git
-cd unix-file-system-simulation
-gcc -o unix_fs_simulation main.c
-./unix_fs_simulation
+cd Unix-File-System-Simulation
+gcc -o Unix_File_System_Simulation.c
+./Unix_File_System_Simulation
 ```

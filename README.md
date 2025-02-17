@@ -37,16 +37,16 @@ pwd
 rm <file/dir>
 
 # Copy a file or directory
-cp <src> <dest>
+cp <src file> <dest file>
 
 # Move or rename a file or directory
-mv <src> <dest>
+mv <src file> <dest file>
 
 # Display file content
 cat <file>
 
 # Search for a file or directory
-find <name>
+find <file>
 ```
 ### Features
 

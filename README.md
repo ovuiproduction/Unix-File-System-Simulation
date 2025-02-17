@@ -50,13 +50,13 @@ find <name>
 ```
 ### Features
 
-File and Directory Management: Create, delete, rename, and move files and directories.
+1. File and Directory Management: Create, delete, rename, and move files and directories.
 
-Navigation: Change directories (cd), list contents (ls), and print the working directory (pwd).
+2. Navigation: Change directories (cd), list contents (ls), and print the working directory (pwd).
 
-File Operations: Create files (touch), read content (cat), and copy files (cp).
+3. File Operations: Create files (touch), read content (cat), and copy files (cp).
 
-Search: Find files and directories using the find command.
+4. Search: Find files and directories using the find command.
 
 Mimics Unix Shell Commands: Supports basic Unix commands like mkdir, rm, mv, etc.
 

@@ -1,397 +1,810 @@
-#include<stdio.h>
-#include<stdlib.h>
-#include<string.h>
-#define MAX 100
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
 
-struct fileNode{
-    char fileName[30];
-    char fileContent[100];
-    int id;
-    struct fileNode* fChild;
-    struct fileNode* parent;
-    struct fileNode* nSibling;
-};
+#define MAX_NAME 256
+#define MAX_CONTENT 1024
+#define MAX_PATH_LENGTH 4096
+#define MAX_QUEUE 1000
 
-char location[MAX] = "";
+typedef enum
+{
+    TYPE_FILE = 0,
+    TYPE_FOLDER = 1
+} NodeType;
 
-struct fileNode* createRootfile(char fileName[],int size){
+typedef struct FileNode
+{
+    char fileName[MAX_NAME];
+    char fileContent[MAX_CONTENT];
+    NodeType type;
+    time_t createdTime;
+    time_t modifiedTime;
+    struct FileNode *parent;
+    struct FileNode *fChild;
+    struct FileNode *nSibling;
+} FileNode;
 
-    struct fileNode *root = (struct fileNode*)malloc(sizeof(struct fileNode));
-    strcpy(root->fileName,fileName);
-    root->id = 1;
-    root->parent = NULL;
-    root->fChild = NULL;
-    root->nSibling = NULL;
+// Function prototypes
+FileNode *createNode(const char *name, const char *content, NodeType type);
+FileNode *findNode(FileNode *root, const char *name);
+FileNode *findParent(FileNode *parentFolder, const char *node);
+int insertNode(FileNode *parent, FileNode *newNode);
+int deleteNode(FileNode *root, FileNode *parent, const char *name);
+void freeTree(FileNode *node);
+void listDirectory(FileNode *node, int showDetails);
+void printPath(FileNode *node);
+void displayHelp(void);
+char *getCurrentTime(time_t t);
+int isValidName(const char *name);
 
-    return root;
-}
-
-
-struct fileNode* find_parent(struct fileNode* parentFolder,char node[]){
-
-    struct fileNode** queue = (struct fileNode**)malloc(sizeof(struct fileNode*)*100);
-    int front = 0;
-    int rare = 0;
-
-    struct fileNode* prev = parentFolder;
-
-    queue[rare++] = parentFolder->fChild;
-
-    while(front < rare){
-
-        struct fileNode* curr = queue[front++];
-        if(!strcmp(curr->fileName,node)){
-            return prev;
-        }
-        prev = curr;
-
-         if(curr->fChild){
-             queue[rare++] = curr->fChild;
-         }
-
-         if(curr->nSibling){
-             struct fileNode* temp = curr->nSibling;
-             while(temp != NULL){
-
-                 if(!strcmp(temp->fileName,node)){
-                    return prev;
-                }
-                prev = temp;
-                 if(temp->fChild){
-                     queue[rare++] = temp->fChild;
-                 }
-                 temp = temp->nSibling;
-             }
-         }
+// Create a new file/folder node
+FileNode *createNode(const char *name, const char *content, NodeType type)
+{
+    if (!isValidName(name))
+    {
+        printf("Error: Invalid name '%s'\n", name);
+        return NULL;
     }
+
+    FileNode *node = (FileNode *)malloc(sizeof(FileNode));
+    if (!node)
+    {
+        printf("Error: Memory allocation failed\n");
+        return NULL;
+    }
+
+    strncpy(node->fileName, name, MAX_NAME - 1);
+    node->fileName[MAX_NAME - 1] = '\0';
+
+    if (content)
+    {
+        strncpy(node->fileContent, content, MAX_CONTENT - 1);
+        node->fileContent[MAX_CONTENT - 1] = '\0';
+    }
+    else
+    {
+        node->fileContent[0] = '\0';
+    }
+
+    node->type = type;
+    node->createdTime = time(NULL);
+    node->modifiedTime = node->createdTime;
+    node->parent = NULL;
+    node->fChild = NULL;
+    node->nSibling = NULL;
+
+    return node;
 }
 
+// Validate filename
+int isValidName(const char *name)
+{
+    if (!name || strlen(name) == 0 || strlen(name) >= MAX_NAME)
+    {
+        return 0;
+    }
 
- struct fileNode* find(struct fileNode* root,char filename[]){
+    // Check for invalid characters
+    const char *invalid = "/\\:*?\"<>|";
+    for (int i = 0; name[i]; i++)
+    {
+        if (strchr(invalid, name[i]))
+        {
+            return 0;
+        }
+    }
 
-    struct fileNode** queue = (struct fileNode**)malloc(sizeof(struct fileNode*)*100);
-    int front = 0;
-    int rare = 0;
+    // Check for reserved names
+    if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0)
+    {
+        return 0;
+    }
 
-    queue[rare++] = root;
+    return 1;
+}
 
-    while(front < rare){
+// Find node by name using BFS
+FileNode *findNode(FileNode *root, const char *name)
+{
+    if (!root || !name)
+        return NULL;
 
-        struct fileNode* curr = queue[front++];
+    FileNode *queue[MAX_QUEUE];
+    int front = 0, rear = 0;
 
-        if(!strcmp(curr->fileName,filename)){
+    queue[rear++] = root;
+
+    while (front < rear)
+    {
+        FileNode *curr = queue[front++];
+
+        if (strcmp(curr->fileName, name) == 0)
+        {
             return curr;
         }
 
-         if(curr->fChild){
-             queue[rare++] = curr->fChild;
-         }
+        // Add first child
+        if (curr->fChild)
+        {
+            if (rear < MAX_QUEUE)
+                queue[rear++] = curr->fChild;
+        }
 
-         if(curr->nSibling){
-             struct fileNode* temp = curr->nSibling;
-             while(temp != NULL){
-
-                 if(!strcmp(temp->fileName,filename)){
-                    return temp;
-                }
-                 if(temp->fChild){
-                     queue[rare++] = temp->fChild;
-                 }
-                 temp = temp->nSibling;
-             }
-         }
+        // Add all siblings
+        FileNode *sibling = curr->nSibling;
+        while (sibling)
+        {
+            if (rear < MAX_QUEUE)
+                queue[rear++] = sibling;
+            sibling = sibling->nSibling;
+        }
     }
+
     return NULL;
 }
 
+// Find parent of a specific node
+FileNode *findParent(FileNode *parentFolder, const char *name)
+{
+    if (!parentFolder || !name)
+        return NULL;
 
-struct fileNode* createFile(char fileName[],char fileContent[],int id,int size){
+    // Check direct children
+    FileNode *child = parentFolder->fChild;
+    FileNode *prev = NULL;
 
-    struct fileNode* newFile = (struct fileNode*)malloc(sizeof(struct fileNode));
+    while (child)
+    {
+        if (strcmp(child->fileName, name) == 0)
+        {
+            return prev ? prev : parentFolder;
+        }
+        prev = child;
+        child = child->nSibling;
+    }
 
-    strcpy(newFile->fileName,fileName);
-    strcpy(newFile->fileContent,fileContent);
-    newFile->id = id;
-    newFile->fChild = NULL;
-    newFile->nSibling = NULL;
-
-    return newFile;
+    return NULL;
 }
 
-void insertFile(struct fileNode* root,char parent[] , char fileName[],char fileContent[],int id){
+// Insert node into parent directory
+int insertNode(FileNode *parent, FileNode *newNode)
+{
+    if (!parent || !newNode)
+        return 0;
 
-    //find parent node
-    struct fileNode* parentFile = find(root,parent);
+    if (parent->type != TYPE_FOLDER)
+    {
+        printf("Error: '%s' is not a directory\n", parent->fileName);
+        return 0;
+    }
 
-    //create new file
-    int size = strlen(fileName);
-    struct fileNode* newnode = createFile(fileName,fileContent,id,size);
-    newnode->parent = parentFile;
+    // Check for duplicate names
+    FileNode *child = parent->fChild;
+    while (child)
+    {
+        if (strcmp(child->fileName, newNode->fileName) == 0)
+        {
+            printf("Error: '%s' already exists\n", newNode->fileName);
+            return 0;
+        }
+        child = child->nSibling;
+    }
 
-    //case 1 parentfile -> child(exist)
-    if(parentFile->fChild){
-        struct fileNode* firstChild = parentFile->fChild;
-        struct fileNode* temp = firstChild;
-        while(temp->nSibling != NULL){
+    newNode->parent = parent;
+
+    if (!parent->fChild)
+    {
+        parent->fChild = newNode;
+    }
+    else
+    {
+        FileNode *temp = parent->fChild;
+        while (temp->nSibling)
+        {
             temp = temp->nSibling;
         }
-        temp->nSibling = newnode;
-    }
-    //case 2 parentfile !-> child(not exist)
-    else if(!(parentFile->fChild)){
-        parentFile->fChild = newnode;
-    }
-}
-
-void deleteFile(struct fileNode* rootfile,char parentFolderName[] , char fileName[]){
-
-
-    struct fileNode* parentFolder = find(rootfile,parentFolderName);
-    struct fileNode* parent = find_parent(parentFolder,fileName);
-
-
-    if((parent->nSibling != NULL) && !strcmp(parent->nSibling->fileName,fileName)){
-
-        struct fileNode* delnode = parent->nSibling;
-
-        //last sibling
-        if(delnode->nSibling == NULL){
-            parent->nSibling = NULL;
-            free(delnode);
-        }
-        else{
-             parent->nSibling = delnode->nSibling;
-             free(delnode);
-        }
-    }
-    else if((parent->fChild != NULL)   &&  !strcmp(parent->fChild->fileName,fileName)){
-
-        struct fileNode* delnode = parent->fChild;
-
-         if(delnode->nSibling == NULL){
-            parent->fChild = NULL;
-            free(delnode);
-        }
-        else if(delnode->nSibling != NULL){
-             parent->fChild = delnode->nSibling;
-             free(delnode);
-        }
+        temp->nSibling = newNode;
     }
 
+    parent->modifiedTime = time(NULL);
+    return 1;
 }
 
+// Delete node from tree
+int deleteNode(FileNode *root, FileNode *parent, const char *name)
+{
+    if (!parent || !name)
+        return 0;
 
-void Rename(struct fileNode* rootfile,char fileName[],char newFileName[]){
+    FileNode *child = parent->fChild;
+    FileNode *prev = NULL;
 
-    struct fileNode* file = find(rootfile,fileName);
-    strcpy(file->fileName,newFileName);
-
-}
-
-
-void view(struct fileNode* root){
-
-    struct fileNode* mainfolders = root->fChild;
-
-    while(mainfolders != NULL){
-        if(mainfolders->id == 1){
-            printf("/%s\n",mainfolders->fileName);
-        }else{
-        printf("%s\n",mainfolders->fileName);
-        }
-        mainfolders = mainfolders->nSibling;
-    }
-}
-
-void manhelp(){
-    printf("\ncommands");
-    printf("\n\nman -> info of all commands");
-    printf("\n\ncd -> go to file/folder");
-    printf("\n\nls -> list all file/folder of current directory");
-    printf("\n\nmkdir -> create folder");
-    printf("\n\ntouch -> create file");
-    printf("\n\nrm -> delete file/folder");
-    printf("\n\ncp -> copy file/folder");
-    printf("\n\ncat -> display file content");
-    printf("\n\nrename -> rename file");
-    printf("\n\nmv -> move file/folder");
-    printf("\n\npwd -> file path of present working directory");
-    printf("\n\nfind -> find file exist or not");
-    printf("\n\nexit -> exit from system\n\n");
-}
-
-int main(){
-
-    char rootfilename[]= "c:";
-
-    struct fileNode* rootfile = createRootfile(rootfilename,4);
-
-    int entrycode;
-    char fileName[30];
-    char parentFileName[100][100];
-    char content[100];
-    char fileRename[30];
-    int fileType;
-    char temp[10];          //temp for gets it read next line of scanf
-
-    int top =-1;
-    strcpy(parentFileName[++top] , "c:");
-
-    char instruction[100];
-
-    char base[100] = "United2004@DESKTOP-Ubuntu:~$";
-
-
-    while(1){
-
-        printf("\n%s ",base);
-        gets(instruction);
-
-        char* token = strtok(instruction," ");
-
-        if(!strcmp(token,"cd")){
-
-            token = strtok(NULL," ");
-
-            if(!strcmp(token,"..")){
-                int len = strlen(base);
-                int lendir = strlen(parentFileName[top]);
-                lendir+=2;
-                top--;
-                base[len-lendir] = '\0';
-                strncat(base,"$",1);
+    while (child)
+    {
+        if (strcmp(child->fileName, name) == 0)
+        {
+            // Check if directory is empty
+            if (child->type == TYPE_FOLDER && child->fChild)
+            {
+                printf("Error: Directory '%s' is not empty\n", name);
+                return 0;
             }
-            else if(!strcmp(token,"~")){
-                strcpy(base,"United2004@DESKTOP-Ubuntu:~$");
-                top = 0;
+
+            // Remove from linked list
+            if (prev)
+            {
+                prev->nSibling = child->nSibling;
             }
-            else{
-                if(find(rootfile,token)){
-                    strcpy(parentFileName[++top],token);
-                    int len = strlen(base);
-                    base[len-1] = '\0';
-                    strncat(base,"/",1);
-                    strcat(base,token);
-                    strncat(base,"$",1);
-                }else{
-                    printf("'%s' file not exist",token);
+            else
+            {
+                parent->fChild = child->nSibling;
+            }
+
+            free(child);
+            parent->modifiedTime = time(NULL);
+            return 1;
+        }
+        prev = child;
+        child = child->nSibling;
+    }
+
+    printf("Error: '%s' not found\n", name);
+    return 0;
+}
+
+// Free entire tree
+void freeTree(FileNode *node)
+{
+    if (!node)
+        return;
+
+    // Free all children recursively
+    FileNode *child = node->fChild;
+    while (child)
+    {
+        FileNode *next = child->nSibling;
+        freeTree(child);
+        child = next;
+    }
+
+    free(node);
+}
+
+// List directory contents
+void listDirectory(FileNode *node, int showDetails)
+{
+    if (!node)
+        return;
+
+    FileNode *child = node->fChild;
+
+    if (!child)
+    {
+        return;
+    }
+
+    while (child)
+    {
+        if (showDetails)
+        {
+            char typeChar = (child->type == TYPE_FOLDER) ? 'd' : '-';
+            char *modTime = getCurrentTime(child->modifiedTime);
+            printf("%c  %s  %s\n", typeChar, modTime, child->fileName);
+            free(modTime);
+        }
+        else
+        {
+            if (child->type == TYPE_FOLDER)
+            {
+                printf("%s/\n", child->fileName);
+            }
+            else
+            {
+                printf("%s\n", child->fileName);
+            }
+        }
+        child = child->nSibling;
+    }
+}
+
+// Print full path from root
+void printPath(FileNode *node)
+{
+    if (!node)
+        return;
+
+    char path[MAX_PATH_LENGTH] = "";
+    FileNode *stack[100];
+    int top = -1;
+
+    // Build stack of nodes from current to root
+    FileNode *temp = node;
+    while (temp)
+    {
+        stack[++top] = temp;
+        temp = temp->parent;
+    }
+
+    // Print path from root to current
+    while (top >= 0)
+    {
+        strcat(path, stack[top]->fileName);
+        if (top > 0)
+            strcat(path, "/");
+        top--;
+    }
+
+    printf("%s\n", path);
+}
+
+// Get formatted time string
+char *getCurrentTime(time_t t)
+{
+    char *timeStr = (char *)malloc(20);
+    struct tm *tm_info = localtime(&t);
+    strftime(timeStr, 20, "%b %d %H:%M", tm_info);
+    return timeStr;
+}
+
+// Display help information
+void displayHelp(void)
+{
+    printf("\n=== File System Commands ===\n");
+    printf("  man              - Display this help message\n");
+    printf("  ls [-l]          - List directory contents (-l for details)\n");
+    printf("  pwd              - Print working directory\n");
+    printf("  cd <dir>         - Change directory\n");
+    printf("  mkdir <name>     - Create directory\n");
+    printf("  touch <name>     - Create file\n");
+    printf("  rm <name>        - Remove file/empty directory\n");
+    printf("  cat <file>       - Display file content\n");
+    printf("  echo > <file>    - Write to file\n");
+    printf("  cp <src> <dst>   - Copy file\n");
+    printf("  mv <src> <dst>   - Move file/directory\n");
+    printf("  rename <old> <new> - Rename file/directory\n");
+    printf("  find <name>      - Find file/directory path\n");
+    printf("  tree             - Display directory tree\n");
+    printf("  clear            - Clear screen\n");
+    printf("  exit             - Exit program\n");
+    printf("============================\n\n");
+}
+
+// Display tree structure
+void displayTree(FileNode *node, int depth)
+{
+    if (!node)
+        return;
+
+    for (int i = 0; i < depth; i++)
+    {
+        printf("  ");
+    }
+
+    if (node->type == TYPE_FOLDER)
+    {
+        printf("[DIR] %s/\n", node->fileName);
+    }
+    else
+    {
+        printf("     %s\n", node->fileName);
+    }
+
+    FileNode *child = node->fChild;
+    while (child)
+    {
+        displayTree(child, depth + 1);
+        child = child->nSibling;
+    }
+}
+
+int main(void)
+{
+    // Create root directory
+    FileNode *root = createNode("root", "", TYPE_FOLDER);
+    if (!root)
+    {
+        printf("Failed to create root directory\n");
+        return 1;
+    }
+
+    FileNode *current = root;
+    char prompt[MAX_PATH_LENGTH];
+    char input[MAX_PATH_LENGTH];
+
+    printf("Welcome to Enhanced File System Simulator\n");
+    printf("Type 'man' for help, 'exit' to quit\n\n");
+
+    while (1)
+    {
+        // Build prompt
+        snprintf(prompt, MAX_PATH_LENGTH, "user@filesystem:~/%s$ ", current->fileName);
+        printf("%s", prompt);
+        fflush(stdout);
+
+        if (!fgets(input, MAX_PATH_LENGTH, stdin))
+        {
+            break;
+        }
+
+        // Remove newline
+        input[strcspn(input, "\n")] = 0;
+
+        if (strlen(input) == 0)
+            continue;
+
+        char *cmd = strtok(input, " ");
+
+        if (strcmp(cmd, "exit") == 0)
+        {
+            break;
+        }
+        else if (strcmp(cmd, "man") == 0 || strcmp(cmd, "help") == 0)
+        {
+            displayHelp();
+        }
+        else if (strcmp(cmd, "clear") == 0)
+        {
+#ifdef _WIN32
+            system("cls");
+#else
+            system("clear");
+#endif
+        }
+        else if (strcmp(cmd, "ls") == 0)
+        {
+            char *flag = strtok(NULL, " ");
+            listDirectory(current, flag && strcmp(flag, "-l") == 0);
+        }
+        else if (strcmp(cmd, "pwd") == 0)
+        {
+            printPath(current);
+        }
+        else if (strcmp(cmd, "cd") == 0)
+        {
+            char *dir = strtok(NULL, " ");
+            if (!dir)
+            {
+                printf("Usage: cd <directory>\n");
+            }
+            else if (strcmp(dir, "..") == 0)
+            {
+                if (current->parent)
+                {
+                    current = current->parent;
+                }
+            }
+            else if (strcmp(dir, "~") == 0 || strcmp(dir, "/") == 0)
+            {
+                current = root;
+            }
+            else
+            {
+                FileNode *target = NULL;
+                FileNode *child = current->fChild;
+                while (child)
+                {
+                    if (strcmp(child->fileName, dir) == 0)
+                    {
+                        target = child;
+                        break;
+                    }
+                    child = child->nSibling;
+                }
+
+                if (target && target->type == TYPE_FOLDER)
+                {
+                    current = target;
+                }
+                else if (target)
+                {
+                    printf("Error: '%s' is not a directory\n", dir);
+                }
+                else
+                {
+                    printf("Error: '%s' not found\n", dir);
                 }
             }
         }
-        else if(!strcmp(token,"ls")){
-            view(find(rootfile,parentFileName[top]));
-        }
-        else if(!strcmp(token,"touch")){
-            token = strtok(NULL," ");
-            char contentfile[] = "filegenerated";
-            insertFile(rootfile,parentFileName[top],token,contentfile,0);
-        }
-        else if(!strcmp(token,"mkdir")){
-            token = strtok(NULL," ");
-            char contentfile[] = "filegenerated";
-            insertFile(rootfile,parentFileName[top],token,contentfile,1);
-        }
-        else if(!strcmp(token,"rm")){
-            token = strtok(NULL," ");
-            if(find(rootfile,token)){
-                deleteFile(rootfile,parentFileName[top],token);
-            }else{
-                printf("'%s' file not exist",token);
+        else if (strcmp(cmd, "mkdir") == 0)
+        {
+            char *name = strtok(NULL, " ");
+            if (!name)
+            {
+                printf("Usage: mkdir <directory_name>\n");
             }
-        }
-        else if(!strcmp(token,"find")){
-            strcpy(location,"");
-            token = strtok(NULL," ");
-            if(find(rootfile,token)){
-                char nodefilename[30];
-                strcpy(nodefilename,"");
-                struct fileNode* file = find(rootfile,token);
-                while(file!=NULL){
-                    strcpy(nodefilename,file->fileName);
-                    strcat(nodefilename,"/");
-                    strcat(nodefilename,location);
-                    strcpy(location,nodefilename);
-                    strcpy(nodefilename,"");
-                    file = file->parent;
+            else
+            {
+                FileNode *newDir = createNode(name, "", TYPE_FOLDER);
+                if (newDir)
+                {
+                    if (!insertNode(current, newDir))
+                    {
+                        free(newDir);
+                    }
                 }
-                printf("%s",location);
-            }
-            else{
-                printf("'%s' file not exist",token);
             }
         }
-        else if(!strcmp(token,"pwd")){
-            strcpy(location,"");
-            for(int i=0;i<=top;i++){
-                strcat(location,parentFileName[i]);
-                strncat(location,"/",1);
+        else if (strcmp(cmd, "touch") == 0)
+        {
+            char *name = strtok(NULL, " ");
+            if (!name)
+            {
+                printf("Usage: touch <filename>\n");
             }
-            printf("%s",location);
-        }
-        else if(!strcmp(token,"cat")){
-            token = strtok(NULL," ");
-                char str[100];
-            if(!strcmp(token,">"))
-               {
-                   token = strtok(NULL," ");
-                   struct fileNode* file = find(rootfile,token);
-                    gets(str);
-                    strcpy(file->fileContent,str);
-               }
-            else if(find(rootfile,token)){
-                struct fileNode* file = find(rootfile,token);
-                printf("%s",file->fileContent);
-            }
-            else{
-                printf("\n'%s' file not exist\n",token);
+            else
+            {
+                FileNode *newFile = createNode(name, "", TYPE_FILE);
+                if (newFile)
+                {
+                    if (!insertNode(current, newFile))
+                    {
+                        free(newFile);
+                    }
+                }
             }
         }
-        else if(!strcmp(token,"mv")){
-            char* source = strtok(NULL," ");
-            char* destination = strtok(NULL," ");
-            if(find(rootfile,source) && find(rootfile,destination)){
-                struct fileNode* file = find(rootfile,source);
-                insertFile(rootfile,destination,source,file->fileContent,file->id);
-                deleteFile(rootfile,parentFileName[top],source);
-            }else{
-                printf("\nfile not exist\n");
+        else if (strcmp(cmd, "rm") == 0)
+        {
+            char *name = strtok(NULL, " ");
+            if (!name)
+            {
+                printf("Usage: rm <name>\n");
+            }
+            else
+            {
+                deleteNode(root, current, name);
             }
         }
-        else if(!strcmp(token,"cp")){
-            char* source = strtok(NULL," ");
-            char* destination = strtok(NULL," ");
-            if(find(rootfile,source)){
-                struct fileNode* file = find(rootfile,source);
-                insertFile(rootfile,parentFileName[top],destination,file->fileContent,file->id);
-            }else{
-                printf("\n'%s' file not exist\n",source);
+        else if (strcmp(cmd, "cat") == 0)
+        {
+            char *name = strtok(NULL, " ");
+            if (!name)
+            {
+                printf("Usage: cat <filename>\n");
+            }
+            else
+            {
+                FileNode *child = current->fChild;
+                while (child)
+                {
+                    if (strcmp(child->fileName, name) == 0)
+                    {
+                        if (child->type == TYPE_FILE)
+                        {
+                            printf("%s\n", child->fileContent);
+                        }
+                        else
+                        {
+                            printf("Error: '%s' is a directory\n", name);
+                        }
+                        break;
+                    }
+                    child = child->nSibling;
+                }
+                if (!child)
+                {
+                    printf("Error: '%s' not found\n", name);
+                }
             }
         }
-        else if(!strcmp(token,"rename")){
-            char* old = strtok(NULL," ");
-            char* new = strtok(NULL," ");
-            if(find(rootfile,old)){
-                struct fileNode* file = find(rootfile,old);
-                strcpy(file->fileName,"");
-                strcpy(file->fileName,new);
-            }else{
-                printf("\n'%s' file not exist\n",old);
+        else if (strcmp(cmd, "echo") == 0)
+        {
+            char *arrow = strtok(NULL, " ");
+            if (arrow && strcmp(arrow, ">") == 0)
+            {
+                char *name = strtok(NULL, " ");
+                if (!name)
+                {
+                    printf("Usage: echo > <filename>\n");
+                }
+                else
+                {
+                    printf("Enter content (press Enter to finish):\n");
+                    char content[MAX_CONTENT];
+                    if (fgets(content, MAX_CONTENT, stdin))
+                    {
+                        content[strcspn(content, "\n")] = 0;
+
+                        FileNode *child = current->fChild;
+                        while (child)
+                        {
+                            if (strcmp(child->fileName, name) == 0)
+                            {
+                                if (child->type == TYPE_FILE)
+                                {
+                                    strncpy(child->fileContent, content, MAX_CONTENT - 1);
+                                    child->modifiedTime = time(NULL);
+                                }
+                                else
+                                {
+                                    printf("Error: '%s' is a directory\n", name);
+                                }
+                                break;
+                            }
+                            child = child->nSibling;
+                        }
+
+                        if (!child)
+                        {
+                            FileNode *newFile = createNode(name, content, TYPE_FILE);
+                            if (newFile)
+                            {
+                                if (!insertNode(current, newFile))
+                                {
+                                    free(newFile);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            else
+            {
+                printf("Usage: echo > <filename>\n");
             }
         }
-        else if(!strcmp(token,"man")){
-            char* type = strtok(NULL," ");
-            if(!strcmp(type,"help")){
-                manhelp();
-            }else{
-                printf("\n%s :commond not found\n",type);
+        else if (strcmp(cmd, "find") == 0)
+        {
+            char *name = strtok(NULL, " ");
+            if (!name)
+            {
+                printf("Usage: find <name>\n");
+            }
+            else
+            {
+                FileNode *found = findNode(root, name);
+                if (found)
+                {
+                    printPath(found);
+                }
+                else
+                {
+                    printf("'%s' not found\n", name);
+                }
             }
         }
-        else if(!strcmp(token,"exit")){
-            exit(0);
+        else if (strcmp(cmd, "tree") == 0)
+        {
+            displayTree(current, 0);
         }
-        else{
-            printf("\n%s :commond not found\n",token);
+        else if (strcmp(cmd, "rename") == 0)
+        {
+            char *oldName = strtok(NULL, " ");
+            char *newName = strtok(NULL, " ");
+            if (!oldName || !newName)
+            {
+                printf("Usage: rename <old_name> <new_name>\n");
+            }
+            else if (!isValidName(newName))
+            {
+                printf("Error: Invalid name '%s'\n", newName);
+            }
+            else
+            {
+                FileNode *child = current->fChild;
+                while (child)
+                {
+                    if (strcmp(child->fileName, oldName) == 0)
+                    {
+                        strncpy(child->fileName, newName, MAX_NAME - 1);
+                        child->modifiedTime = time(NULL);
+                        break;
+                    }
+                    child = child->nSibling;
+                }
+                if (!child)
+                {
+                    printf("Error: '%s' not found\n", oldName);
+                }
+            }
         }
-   }
+        else if (strcmp(cmd, "mv") == 0)
+        {
+            char *src = strtok(NULL, " ");
+            char *dst = strtok(NULL, " ");
+            if (!src || !dst)
+            {
+                printf("Usage: mv <source> <destination>\n");
+            }
+            else
+            {
+                FileNode *srcNode = findNode(root, src);
+                FileNode *dstNode = findNode(root, dst);
+
+                if (!srcNode)
+                {
+                    printf("Error: '%s' not found\n", src);
+                }
+                else if (!dstNode || dstNode->type != TYPE_FOLDER)
+                {
+                    printf("Error: '%s' is not a valid directory\n", dst);
+                }
+                else
+                {
+                    // Remove from old location
+                    FileNode *srcParent = srcNode->parent;
+                    if (srcParent)
+                    {
+                        FileNode *child = srcParent->fChild;
+                        FileNode *prev = NULL;
+
+                        while (child)
+                        {
+                            if (child == srcNode)
+                            {
+                                if (prev)
+                                {
+                                    prev->nSibling = child->nSibling;
+                                }
+                                else
+                                {
+                                    srcParent->fChild = child->nSibling;
+                                }
+                                child->nSibling = NULL;
+                                break;
+                            }
+                            prev = child;
+                            child = child->nSibling;
+                        }
+                    }
+
+                    // Insert in new location
+                    insertNode(dstNode, srcNode);
+                }
+            }
+        }
+        else if (strcmp(cmd, "cp") == 0)
+        {
+            char *src = strtok(NULL, " ");
+            char *dst = strtok(NULL, " ");
+            if (!src || !dst)
+            {
+                printf("Usage: cp <source> <destination>\n");
+            }
+            else
+            {
+                FileNode *child = current->fChild;
+                while (child)
+                {
+                    if (strcmp(child->fileName, src) == 0)
+                    {
+                        if (child->type == TYPE_FILE)
+                        {
+                            FileNode *copy = createNode(dst, child->fileContent, TYPE_FILE);
+                            if (copy)
+                            {
+                                if (!insertNode(current, copy))
+                                {
+                                    free(copy);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            printf("Error: Cannot copy directories\n");
+                        }
+                        break;
+                    }
+                    child = child->nSibling;
+                }
+                if (!child)
+                {
+                    printf("Error: '%s' not found\n", src);
+                }
+            }
+        }
+        else
+        {
+            printf("Command not found: %s\n", cmd);
+            printf("Type 'man' for help\n");
+        }
+    }
+
+    printf("\nCleaning up...\n");
+    freeTree(root);
+    printf("Goodbye!\n");
+
     return 0;
 }

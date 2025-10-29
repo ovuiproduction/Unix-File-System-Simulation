@@ -18,35 +18,23 @@ File System Management
 
 ### File System Operations
 ```bash
-# Create a new directory
-mkdir <dir>
-
-# Create a new file
-touch <file>
-
-# Change directory
-cd <dir>
-
-# List files and directories
-ls
-
-# Display the current path
-pwd
-
-# Delete a file or directory
-rm <file/dir>
-
-# Copy a file or directory
-cp <src file> <dest file>
-
-# Move or rename a file or directory
-mv <src file> <dest file>
-
-# Display file content
-cat <file>
-
-# Search for a file or directory
-find <file>
+# Available commands (usage)
+man                      # Display help
+ls [-l]                  # List files/directories, -l for details (date/type)
+pwd                      # Print working directory
+cd <dir>                 # Change directory (.., ~ or / supported)
+mkdir <dir>              # Create a new directory
+touch <file>             # Create a new empty file
+rm <file/dir>            # Remove a file or empty directory
+cp <src> <dst>           # Copy file (files only)
+mv <src> <dst_dir>       # Move file or directory into destination directory
+rename <old> <new>       # Rename file or directory in current dir
+cat <file>               # Display file content
+echo > <file>            # Write a single line to file (overwrites or creates)
+find <name>              # Find file/directory path (searches entire tree)
+tree                     # Display directory tree for current directory
+clear                    # Clear the screen
+exit                     # Exit the program
 ```
 ### Features
 
@@ -67,6 +55,6 @@ Use the following commands to install and run the project:
 ```bash
 git clone https://github.com/ovuiproduction/Unix-File-System-Simulation.git
 cd Unix-File-System-Simulation
-gcc -o Unix_File_System_Simulation.c
-./Unix_File_System_Simulation
+gcc Unix_File_System_Simulation.c -o app.exe
+./app.exe
 ```

@@ -1,8 +1,14 @@
 ## Unix File System Simulation using N-ary Tree
 
+### Demo
+
+**[Demo Video](https://youtu.be/lfB_HMSvs-c)**
+
 ### Overview
 
 This project simulates a Unix-like file system using an N-ary tree data structure. It provides essential file and directory operations such as creation, deletion, traversal, and renaming. The project also includes a command-line interface that mimics Unix shell commands.
+
+----
 
 ### Tech Stack
 ```bash
@@ -15,6 +21,7 @@ N-ary Tree
 # Concepts
 File System Management
 ```
+---
 
 ### File System Operations
 ```bash
@@ -36,6 +43,9 @@ tree                     # Display directory tree for current directory
 clear                    # Clear the screen
 exit                     # Exit the program
 ```
+
+---
+
 ### Features
 
 1. File and Directory Management: Create, delete, rename, and move files and directories.
@@ -48,6 +58,8 @@ exit                     # Exit the program
 
 Mimics Unix Shell Commands: Supports basic Unix commands like mkdir, rm, mv, etc.
 
+---
+
 ### Installation
 
 Use the following commands to install and run the project:
@@ -58,3 +70,5 @@ cd Unix-File-System-Simulation
 gcc Unix_File_System_Simulation.c -o app.exe
 ./app.exe
 ```
+
+---
